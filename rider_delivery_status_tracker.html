@@ -1,0 +1,756 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --amber: #F59E0B;
+    --amber-light: #FEF3C7;
+    --amber-dark: #92400E;
+    --green: #10B981;
+    --green-light: #ECFDF5;
+    --red: #EF4444;
+    --red-light: #FEF2F2;
+    --blue: #3B82F6;
+    --blue-light: #EFF6FF;
+    --purple: #8B5CF6;
+    --purple-light: #F5F3FF;
+    --dark: #111827;
+    --mid: #6B7280;
+    --border: #E5E7EB;
+    --bg: #F9FAFB;
+    --white: #ffffff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--dark); min-height: 100vh; }
+
+  .header { background: var(--dark); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 36px; height: 36px; background: var(--amber); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: var(--dark); flex-shrink: 0; }
+  .header h1 { font-size: 15px; font-weight: 600; color: #fff; }
+  .header-sub { font-size: 11px; color: #9CA3AF; }
+  .tab-toggle { display: flex; background: #1F2937; border-radius: 8px; padding: 3px; gap: 2px; }
+  .tab-btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.18s; background: transparent; color: #9CA3AF; }
+  .tab-btn.active { background: var(--amber); color: var(--dark); }
+
+  .main { padding: 16px; max-width: 900px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mid); margin-bottom: 8px; }
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 11px; font-weight: 500; color: var(--mid); }
+  input, select, textarea {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+    font-size: 13px; color: var(--dark); background: var(--bg);
+    outline: none; transition: border 0.15s; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--amber); background: #fff; }
+  textarea { resize: vertical; min-height: 56px; }
+
+  .gps-hint { font-size: 10px; color: var(--mid); margin-top: 3px; }
+  .coords-link { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); font-family: monospace; text-decoration: none; }
+  .coords-link:hover { text-decoration: underline; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 4px; align-items: center; }
+  .btn { padding: 9px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+  .btn-primary { background: var(--amber); color: var(--dark); }
+  .btn-primary:hover { background: #D97706; }
+  .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--mid); }
+  .btn-secondary:hover { border-color: var(--mid); color: var(--dark); }
+  .btn-danger { background: var(--red-light); color: var(--red); border: 1px solid #FCA5A5; font-size: 12px; padding: 6px 12px; }
+  .btn-danger:hover { background: #FEE2E2; }
+  .btn-edit { background: var(--blue-light); color: var(--blue); border: 1px solid #BFDBFE; font-size: 12px; padding: 6px 12px; }
+  .btn-edit:hover { background: #DBEAFE; }
+
+  .saved-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--green); background: var(--green-light); border: 1px solid #6EE7B7; padding: 3px 9px; border-radius: 20px; }
+  .saved-tag::before { content: '✓'; font-weight: 700; }
+
+  .orders-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .orders-table th { background: var(--bg); padding: 8px 10px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mid); border-bottom: 1px solid var(--border); }
+  .orders-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .orders-table tr:last-child td { border-bottom: none; }
+  .orders-table tr:hover td { background: #FAFAFA; }
+
+  .initials-badge { display: inline-block; padding: 3px 8px; border-radius: 5px; background: var(--amber-light); color: var(--amber-dark); font-weight: 700; font-size: 11px; }
+  .coords-cell { font-size: 11px; color: var(--blue); font-family: monospace; }
+
+  .status-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .status-pending   { background: #FEF3C7; color: #92400E; }
+  .status-picked    { background: #EFF6FF; color: #1D4ED8; }
+  .status-enroute   { background: #F5F3FF; color: #5B21B6; }
+  .status-delivered { background: #ECFDF5; color: #065F46; }
+
+  .empty-state { text-align: center; padding: 32px; color: var(--mid); font-size: 13px; }
+  .empty-state .icon { font-size: 28px; margin-bottom: 8px; }
+
+  .rider-header { background: var(--dark); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+  .rider-title { font-size: 14px; font-weight: 600; color: #fff; }
+  .rider-sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 5px; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .rider-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; border-left: 4px solid var(--amber); }
+  .rider-card.status-picked    { border-left-color: var(--blue); }
+  .rider-card.status-enroute   { border-left-color: var(--purple); }
+  .rider-card.status-delivered { border-left-color: var(--green); opacity: 0.7; }
+
+  .rider-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .rider-card-name { font-size: 15px; font-weight: 600; }
+  .rider-card-meta { font-size: 12px; color: var(--mid); margin-top: 2px; }
+  .rider-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rider-detail { background: var(--bg); border-radius: 7px; padding: 8px 10px; }
+  .rider-detail-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mid); margin-bottom: 2px; }
+  .rider-detail-value { font-size: 13px; font-weight: 500; color: var(--dark); }
+  .rider-coords { font-family: monospace; font-size: 12px; color: var(--blue); }
+  .rider-special { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 7px; padding: 8px 10px; margin-top: 8px; font-size: 12px; color: #92400E; }
+  .rider-special strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .map-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--blue); text-decoration: none; margin-top: 8px; }
+  .map-link:hover { text-decoration: underline; }
+
+  .rider-assignment-controls { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .rider-status-controls { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .rider-status-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mid); }
+  .rider-status-actions { display: flex; gap: 8px; align-items: center; width: 100%; max-width: 360px; }
+  .rider-select,
+  .rider-status-select {
+    flex: 1 1 auto; min-width: 180px; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--white); color: var(--dark); font-size: 12px; font-weight: 600; outline: none;
+  }
+  .rider-status-select.status-picked { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+  .rider-status-select.status-enroute { background: #F5F3FF; color: #5B21B6; border-color: #DDD6FE; }
+  .rider-status-select.status-delivered { background: #ECFDF5; color: #065F46; border-color: #A7F3D0; }
+  .rider-select { width: 100%; max-width: 220px; }
+
+  .month-group { margin-bottom: 14px; }
+  .month-group-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--amber-dark); background: var(--amber-light); border: 1px solid #FCD34D;
+    border-radius: 999px; padding: 6px 10px; display: inline-flex; margin: 0 0 10px 0;
+  }
+
+  .sync-status {
+    margin-top: 10px; font-size: 11px; color: var(--mid); display: none;
+    padding: 7px 10px; border-radius: 7px; background: #F3F4F6; border: 1px solid var(--border);
+  }
+  .sync-status.success { color: #065F46; background: #ECFDF5; border-color: #A7F3D0; }
+  .sync-status.warning { color: #92400E; background: #FEF3C7; border-color: #FCD34D; }
+
+  @media(max-width:600px) {
+    .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+    .rider-detail-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 13px; }
+    .tab-btn { padding: 5px 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">KFD</div>
+    <div>
+      <div style="font-size:15px;font-weight:600;color:#fff;">Rider Delivery Status</div>
+      <div class="header-sub">Kwahu Food Delivery — Live Order Tracker</div>
+    </div>
+  </div>
+  <div class="tab-toggle">
+    <button class="tab-btn active" onclick="switchTab('cs', this)">CS Panel</button>
+    <button class="tab-btn" onclick="switchTab('rider', this)">Rider View</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ══ CS PANEL ══ -->
+  <div class="view active" id="view-cs">
+
+    <div class="section-label">Add / Update Order</div>
+    <div class="card">
+
+      <!-- Row 1: Initials, Name, Contact -->
+      <div class="form-grid three">
+        <div class="form-group">
+          <label>Order Initials *</label>
+          <input id="f-initials" type="text" placeholder="e.g. K.O" maxlength="6">
+        </div>
+        <div class="form-group">
+          <label>Customer Name *</label>
+          <input id="f-name" type="text" placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label>Contact Number</label>
+          <input id="f-contact" type="text" placeholder="0XX XXX XXXX">
+        </div>
+      </div>
+
+      <!-- Row 2: Meal, Area -->
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="form-group">
+          <label>Meal / Order Details</label>
+          <input id="f-meal" type="text" placeholder="e.g. Jollof rice + chicken">
+        </div>
+        <div class="form-group">
+          <label>Delivery Area</label>
+          <input id="f-area" type="text" placeholder="e.g. Nkwatia, Mpraeso">
+        </div>
+      </div>
+
+      <!-- Row 3: GPS Coordinates, Landmark -->
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="form-group">
+          <label>GPS Coordinates</label>
+          <input id="f-gps" type="text" placeholder="e.g. 6.5880, -0.4250">
+          <div class="gps-hint">Paste the full GPS coordinate from the customer's pin</div>
+        </div>
+        <div class="form-group">
+          <label>Landmark</label>
+          <input id="f-landmark" type="text" placeholder="e.g. Behind St. Peter's Church">
+        </div>
+      </div>
+
+      <!-- Row 4: Status, Special Requests -->
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="form-group">
+          <label>Delivery Status *</label>
+          <select id="f-status">
+            <option value="pending">⏳ Pending — Order Received</option>
+            <option value="picked">📦 Picked — Rider Collected Order</option>
+            <option value="enroute">🛵 En Route — On the Way</option>
+            <option value="delivered">✅ Delivered</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Special Requests</label>
+          <input id="f-special" type="text" placeholder="e.g. No shito, light soup please">
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+        <span id="save-feedback" style="display:none;" class="saved-tag">Saved!</span>
+      </div>
+      <div id="sheet-sync-status" class="sync-status">Waiting for Google Sheet sync…</div>
+      <input type="hidden" id="f-edit-id">
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap;">
+      <div class="section-label" style="margin:0;">All Orders</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="loadOrdersFromGoogleSheet()" style="font-size:12px;padding:6px 12px;">↻ Sync Sheet</button>
+        <span id="order-count" style="font-size:12px;color:var(--mid);"></span>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div id="orders-list"></div>
+    </div>
+
+  </div>
+
+  <!-- ══ RIDER VIEW ══ -->
+  <div class="view" id="view-rider">
+    <div class="rider-header">
+      <div>
+        <div class="rider-title">🛵 Your Deliveries</div>
+        <div class="rider-sub"><span class="live-dot"></span>Live — updated by Customer Service</div>
+      </div>
+      <button class="btn btn-secondary" onclick="renderRiderView()" style="font-size:12px;padding:6px 12px;">↻ Refresh</button>
+    </div>
+    <div id="rider-cards"></div>
+  </div>
+
+</div>
+
+<script>
+const GOOGLE_SHEET_DOC_ID = '1NOMpnZpyowoC1rGVjP-rD5Udbr3DazVjHds2bioH-4';
+const GOOGLE_SHEET_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_DOC_ID}/gviz/tq?tqx=out:json&sheet=Sheet1&headers=1`;
+const STATUS_ORDER = { pending: 0, picked: 1, enroute: 2, delivered: 3 };
+const STORAGE_MONTH_PREFIX = 'kfd_orders_month_';
+const STORAGE_MONTH_LIST = 'kfd_order_month_keys';
+
+let orders = [];
+let editingId = null;
+
+function parseGpsText(text = '') {
+  const cleaned = String(text || '').replace(/[()]/g, '').trim();
+  const parts = cleaned.split(',').map(part => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const [lat, lng] = parts;
+    return { gps: `${lat}, ${lng}`, lat, lng };
+  }
+  return { gps: cleaned, lat: '', lng: '' };
+}
+
+function getMonthKey(dateLike = new Date()) {
+  const date = dateLike instanceof Date ? dateLike : new Date(dateLike || Date.now());
+  if (Number.isNaN(date.getTime())) return 'invalid-month';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthLabel(monthKey = '') {
+  const [year, month] = String(monthKey || '').split('-');
+  if (!year || !month) return 'Unknown month';
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function normalizeOrder(o = {}) {
+  const dt = o.createdAt || o.updatedAt || o.created || o.updated || new Date().toISOString();
+  const monthKey = o.monthKey || getMonthKey(dt);
+  const { gps, lat, lng } = parseGpsText(o.gps || `${o.lat || ''}, ${o.lng || ''}`);
+  return {
+    ...o,
+    rider: o.rider || 'Unassigned',
+    status: (o.status || 'pending').toLowerCase(),
+    monthKey,
+    createdAt: o.createdAt || dt,
+    updatedAt: o.updatedAt || dt,
+    gps,
+    lat,
+    lng,
+  };
+}
+
+function loadStoredOrders() {
+  const monthKeys = JSON.parse(localStorage.getItem(STORAGE_MONTH_LIST) || '[]');
+  const buckets = monthKeys
+    .filter(Boolean)
+    .map(monthKey => {
+      const payload = JSON.parse(localStorage.getItem(`${STORAGE_MONTH_PREFIX}${monthKey}`) || '[]');
+      return Array.isArray(payload) ? payload : [];
+    });
+
+  const savedOrders = buckets.flat().map(normalizeOrder);
+  if (savedOrders.length) {
+    orders = savedOrders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    return;
+  }
+
+  const legacyOrders = JSON.parse(localStorage.getItem('kfd_orders') || '[]').map(normalizeOrder);
+  orders = legacyOrders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+  save();
+}
+
+function normalizeSheetKey(key = '') {
+  return String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function loadGoogleSheetPayload() {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error('Google Sheet load timed out.'));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timeoutId);
+      const script = document.getElementById('kfd-sheet-loader');
+      if (script && script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window.google = window.google || {};
+    window.google.visualization = window.google.visualization || {};
+    window.google.visualization.Query = {
+      setResponse: (payload) => {
+        cleanup();
+        resolve(payload);
+      }
+    };
+
+    const script = document.createElement('script');
+    script.id = 'kfd-sheet-loader';
+    script.src = GOOGLE_SHEET_GVIZ_URL;
+    script.async = true;
+    script.onload = () => {};
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Google Sheet script could not be loaded.'));
+    };
+
+    document.head.appendChild(script);
+  });
+}
+
+function mapSheetRowToOrder(row = {}) {
+  const normalized = Object.fromEntries(
+    Object.entries(row || {}).map(([key, value]) => [normalizeSheetKey(key), String(value ?? '').trim()])
+  );
+
+  const fullName = normalized.name || normalized.customername || '';
+  const initials = normalized.initials || normalized.orderinitials || (fullName ? fullName.split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase() : '');
+  const status = (normalized.status || 'pending').toLowerCase();
+
+  if (!initials && !fullName) return null;
+
+  return {
+    id: normalized.id || uid(),
+    initials,
+    name: fullName,
+    contact: normalized.contact || normalized.phonenumber || '',
+    meal: normalized.meal || normalized.orderdetails || normalized.order || '',
+    area: normalized.area || normalized.deliveryarea || '',
+    gps: normalized.gps || normalized.coordinates || normalized.gpscoordinates || '',
+    landmark: normalized.landmark || '',
+    status: ['pending', 'picked', 'enroute', 'delivered'].includes(status) ? status : 'pending',
+    special: normalized.special || normalized.specialrequests || '',
+    created: normalized.created || normalized.date || now(),
+    updated: normalized.updated || normalized.lastupdated || now(),
+  };
+}
+
+function setSyncStatus(message, type = 'warning') {
+  const statusEl = document.getElementById('sheet-sync-status');
+  if (!statusEl) return;
+  statusEl.className = 'sync-status ' + type;
+  statusEl.textContent = message;
+  statusEl.style.display = 'block';
+}
+
+async function loadOrdersFromGoogleSheet() {
+  if (window.location.protocol === 'file:') {
+    setSyncStatus('Open the tracker from a local web server (http://) to enable live Google Sheet sync.', 'warning');
+    return;
+  }
+
+  try {
+    const payload = await loadGoogleSheetPayload();
+    const headers = (payload?.table?.cols || []).map(col => normalizeSheetKey(col.label || col.id));
+    const rows = (payload?.table?.rows || []).map((entry) => {
+      const values = entry.c || [];
+      return Object.fromEntries(headers.map((header, index) => [header, values[index]?.v ?? '']));
+    });
+
+    const sheetOrders = rows.map(mapSheetRowToOrder).filter(Boolean);
+    if (sheetOrders.length) {
+      orders = sheetOrders.map(normalizeOrder);
+      save();
+      setSyncStatus('Google Sheet synced successfully from the public view endpoint.', 'success');
+    } else {
+      setSyncStatus('Google Sheet loaded, but no usable delivery rows were found.', 'warning');
+    }
+  } catch (error) {
+    console.warn('Falling back to local tracker data because the public Google Sheet could not be loaded.', error);
+    setSyncStatus('The public sheet could not be fetched from this browser context. Using the local tracker copy for now.', 'warning');
+  }
+}
+
+function save() {
+  const persistedKeys = JSON.parse(localStorage.getItem(STORAGE_MONTH_LIST) || '[]');
+  const bucketMap = {};
+
+  orders.map(normalizeOrder).forEach(order => {
+    const bucketKey = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
+    if (!bucketMap[bucketKey]) bucketMap[bucketKey] = [];
+    bucketMap[bucketKey].push(order);
+  });
+
+  const monthKeys = Object.keys(bucketMap).sort((a, b) => b.localeCompare(a));
+  localStorage.setItem(STORAGE_MONTH_LIST, JSON.stringify(monthKeys));
+
+  persistedKeys.forEach(monthKey => {
+    if (!bucketMap[monthKey]) {
+      localStorage.removeItem(`${STORAGE_MONTH_PREFIX}${monthKey}`);
+    }
+  });
+
+  monthKeys.forEach(monthKey => {
+    localStorage.setItem(`${STORAGE_MONTH_PREFIX}${monthKey}`, JSON.stringify(bucketMap[monthKey]));
+  });
+
+  localStorage.setItem('kfd_orders', JSON.stringify(orders.map(normalizeOrder)));
+}
+function uid()  { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function now()  {
+  const d = new Date();
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' +
+         d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function timestamp() { return new Date().toISOString(); }
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + tab).classList.add('active');
+  btn.classList.add('active');
+  if (tab === 'rider') renderRiderView();
+}
+
+function getFormData() {
+  const { gps, lat, lng } = parseGpsText(document.getElementById('f-gps').value);
+  return {
+    initials: document.getElementById('f-initials').value.trim().toUpperCase(),
+    name:     document.getElementById('f-name').value.trim(),
+    contact:  document.getElementById('f-contact').value.trim(),
+    meal:     document.getElementById('f-meal').value.trim(),
+    area:     document.getElementById('f-area').value.trim(),
+    gps,
+    lat,
+    lng,
+    landmark: document.getElementById('f-landmark').value.trim(),
+    status:   document.getElementById('f-status').value,
+    special:  document.getElementById('f-special').value.trim(),
+  };
+}
+
+function fillForm(o) {
+  document.getElementById('f-initials').value = o.initials || '';
+  document.getElementById('f-name').value     = o.name || '';
+  document.getElementById('f-contact').value  = o.contact || '';
+  document.getElementById('f-meal').value     = o.meal || '';
+  document.getElementById('f-area').value     = o.area || '';
+  document.getElementById('f-gps').value      = o.gps || (o.lat && o.lng ? `${o.lat}, ${o.lng}` : '');
+  document.getElementById('f-landmark').value = o.landmark || '';
+  document.getElementById('f-status').value   = o.status || 'pending';
+  document.getElementById('f-special').value  = o.special || '';
+}
+
+function clearForm() {
+  ['f-initials','f-name','f-contact','f-meal','f-area','f-gps','f-landmark','f-special']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-status').value = 'pending';
+  editingId = null;
+  document.getElementById('save-feedback').style.display = 'none';
+}
+
+function saveOrder() {
+  const d = getFormData();
+  if (!d.initials || !d.name) { alert('Order Initials and Customer Name are required.'); return; }
+
+  const nowStamp = timestamp();
+  const monthKey = getMonthKey(nowStamp);
+  const current = orders.find(o => o.id === editingId);
+
+  if (editingId) {
+    const idx = orders.findIndex(o => o.id === editingId);
+    if (idx > -1) {
+      orders[idx] = normalizeOrder({
+        ...orders[idx],
+        ...d,
+        monthKey: current?.monthKey || monthKey,
+        createdAt: current?.createdAt || nowStamp,
+        updatedAt: nowStamp,
+        created: current?.created || now(),
+        updated: now(),
+      });
+    }
+  } else {
+    orders.unshift(normalizeOrder({
+      id: uid(),
+      ...d,
+      monthKey,
+      createdAt: nowStamp,
+      updatedAt: nowStamp,
+      created: now(),
+      updated: now(),
+    }));
+  }
+
+  orders = orders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+  save(); clearForm();
+  const fb = document.getElementById('save-feedback');
+  fb.style.display = 'inline-flex';
+  setTimeout(() => fb.style.display = 'none', 2200);
+  renderCSList();
+  renderRiderView();
+}
+
+function editOrder(id) {
+  const o = orders.find(o => o.id === id);
+  if (!o) return;
+  editingId = id;
+  fillForm(o);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteOrder(id) {
+  if (!confirm('Remove this order from the tracker permanently?')) return;
+  orders = orders.filter(o => o.id !== id);
+  save();
+  renderCSList();
+  renderRiderView();
+}
+
+const STATUS_LABELS = { pending:'⏳ Pending', picked:'📦 Picked Up', enroute:'🛵 En Route', delivered:'✅ Delivered' };
+function statusPill(s) { return `<span class="status-pill status-${s}">${STATUS_LABELS[s]||s}</span>`; }
+function gpsLink(o) {
+  const gps = o.gps || (o.lat && o.lng ? `${o.lat}, ${o.lng}` : '');
+  if (!gps) return '—';
+  const [lat, lng] = gps.split(',').map(part => part.trim());
+  if (!lat || !lng) return gps;
+  return `<a class="coords-link" href="https://maps.google.com/?q=${lat},${lng}" target="_blank" rel="noopener noreferrer">${gps}</a>`;
+}
+
+function renderCSList() {
+  const el  = document.getElementById('orders-list');
+  const cnt = document.getElementById('order-count');
+  cnt.textContent = orders.length + ' order' + (orders.length !== 1 ? 's' : '');
+  if (!orders.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📋</div>No orders yet. Add the first one above.</div>';
+    return;
+  }
+
+  const grouped = Object.entries(
+    orders.reduce((acc, order) => {
+      const key = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(order);
+      return acc;
+    }, {})
+  ).sort((a, b) => b[0].localeCompare(a[0]));
+
+  el.innerHTML = grouped.map(([monthKey, monthOrders]) => `
+    <div class="month-group">
+      <div class="month-group-title">${getMonthLabel(monthKey)}</div>
+      <table class="orders-table">
+        <thead><tr>
+          <th>Initials</th><th>Customer</th><th>Meal</th>
+          <th>Area / Landmark</th><th>GPS Coordinates</th>
+          <th>Status</th><th>Updated</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${monthOrders.map(o => `
+          <tr>
+            <td><span class="initials-badge">${o.initials}</span></td>
+            <td>
+              <div style="font-weight:500;font-size:13px;">${o.name}</div>
+              <div style="font-size:11px;color:var(--mid);">${o.contact||'—'}</div>
+            </td>
+            <td style="font-size:12px;max-width:120px;">${o.meal||'—'}
+              ${o.special?`<div style="font-size:11px;color:#92400E;margin-top:2px;">⚠ ${o.special}</div>`:''}
+            </td>
+            <td style="font-size:12px;">${o.area||'—'}<br>
+              <span style="color:var(--mid);font-size:11px;">${o.landmark||''}</span>
+            </td>
+            <td class="coords-cell">${gpsLink(o)}</td>
+            <td>${statusPill(o.status)}</td>
+            <td style="font-size:11px;color:var(--mid);white-space:nowrap;">${o.updated||o.created||''}</td>
+            <td>
+              <div style="display:flex;gap:5px;">
+                <button class="btn btn-edit" onclick="editOrder('${o.id}')">Edit</button>
+                <button class="btn btn-danger" onclick="deleteOrder('${o.id}')">✕</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`).join('');
+}
+
+function updateRiderStatus(orderId, status) {
+  const order = orders.find(item => item.id === orderId);
+  if (!order) return;
+
+  order.status = ['picked', 'enroute', 'delivered'].includes(status) ? status : 'pending';
+  order.updated = now();
+  order.updatedAt = timestamp();
+  order.monthKey = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
+  save();
+  renderCSList();
+  renderRiderView();
+}
+
+function updateRiderAssignment(orderId, rider) {
+  const order = orders.find(item => item.id === orderId);
+  if (!order) return;
+
+  order.rider = rider || 'Unassigned';
+  order.updated = now();
+  order.updatedAt = timestamp();
+  order.monthKey = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
+  save();
+  renderCSList();
+  renderRiderView();
+}
+
+function renderRiderView() {
+  const el = document.getElementById('rider-cards');
+  const sorted = [...orders].sort((a, b) => (STATUS_ORDER[a.status] || 0) - (STATUS_ORDER[b.status] || 0));
+  if (!sorted.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">🛵</div>No deliveries assigned yet. Check back soon.</div>';
+    return;
+  }
+
+  const grouped = Object.entries(
+    sorted.reduce((acc, order) => {
+      const key = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(order);
+      return acc;
+    }, {})
+  ).sort((a, b) => b[0].localeCompare(a[0]));
+
+  el.innerHTML = grouped.map(([monthKey, monthOrders]) => `
+    <div class="month-group">
+      <div class="month-group-title">${getMonthLabel(monthKey)}</div>
+      ${monthOrders.map(o => `
+        <div class="rider-card status-${o.status}">
+          <div class="rider-assignment-controls">
+            <div class="rider-status-label">Assign Rider</div>
+            <select class="rider-select" data-order-id="${o.id}" onchange="updateRiderAssignment(this.dataset.orderId, this.value)">
+              <option value="Rider1" ${o.rider === 'Rider1' ? 'selected' : ''}>Rider1</option>
+              <option value="Rider2" ${o.rider === 'Rider2' ? 'selected' : ''}>Rider2</option>
+              <option value="Rider3" ${o.rider === 'Rider3' ? 'selected' : ''}>Rider3</option>
+              <option value="Rider4" ${o.rider === 'Rider4' ? 'selected' : ''}>Rider4</option>
+            </select>
+          </div>
+          <div class="rider-card-top">
+            <div>
+              <div class="rider-card-name">${o.name} <span class="initials-badge" style="font-size:12px;">${o.initials}</span></div>
+              <div class="rider-card-meta">${o.contact ? '📞 ' + o.contact : ''} &nbsp; 🕐 Updated: ${o.updated || o.created || '—'}</div>
+            </div>
+            ${statusPill(o.status)}
+          </div>
+          <div class="rider-detail-grid">
+            <div class="rider-detail">
+              <div class="rider-detail-label">🍽 Order</div>
+              <div class="rider-detail-value">${o.meal || '—'}</div>
+            </div>
+            <div class="rider-detail">
+              <div class="rider-detail-label">📍 Delivery Area</div>
+              <div class="rider-detail-value">${o.area || '—'}</div>
+            </div>
+            <div class="rider-detail">
+              <div class="rider-detail-label">🏠 Landmark</div>
+              <div class="rider-detail-value">${o.landmark || '—'}</div>
+            </div>
+            <div class="rider-detail">
+              <div class="rider-detail-label">🗺 GPS Coordinates</div>
+              <div class="rider-detail-value rider-coords">${gpsLink(o)}</div>
+            </div>
+          </div>
+          ${o.special ? `<div class="rider-special"><strong>⚠ Special Request</strong>${o.special}</div>` : ''}
+          <div class="rider-status-controls">
+            <div class="rider-status-label">Update Delivery Stage</div>
+            <div class="rider-status-actions">
+              <select class="rider-status-select status-${o.status}" data-order-id="${o.id}" onchange="updateRiderStatus(this.dataset.orderId, this.value)">
+                <option value="picked" ${o.status === 'picked' ? 'selected' : ''}>Picked</option>
+                <option value="enroute" ${o.status === 'enroute' ? 'selected' : ''}>Enroute</option>
+                <option value="delivered" ${o.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+              </select>
+              <button class="btn btn-danger" onclick="deleteOrder('${o.id}')">Delete</button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+(async function initTracker() {
+  loadStoredOrders();
+  await loadOrdersFromGoogleSheet();
+  renderCSList();
+  renderRiderView();
+  setInterval(loadOrdersFromGoogleSheet, 30000);
+})();
+</script>
+</body>
+</html>
