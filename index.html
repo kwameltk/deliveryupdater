@@ -217,7 +217,7 @@
       </div>
 
       <!-- Row 4: Status, Special Requests -->
-      <div class="form-grid" style="margin-top:10px;">
+      <div class="form-grid" style="margin-top:10px;grid-template-columns:1fr 1fr 1fr;">
         <div class="form-group">
           <label>Delivery Status *</label>
           <select id="f-status">
@@ -230,6 +230,12 @@
         <div class="form-group">
           <label>Special Requests</label>
           <input id="f-special" type="text" placeholder="e.g. No shito, light soup please">
+        </div>
+        <div class="form-group">
+          <label>Assigned Rider</label>
+          <select id="f-rider">
+            <!-- options populated on init -->
+          </select>
         </div>
       </div>
 
@@ -276,6 +282,16 @@ const STATUS_ORDER = { pending: 0, picked: 1, enroute: 2, delivered: 3 };
 const STORAGE_MONTH_PREFIX = 'kfd_orders_month_';
 const STORAGE_MONTH_LIST = 'kfd_order_month_keys';
 
+// Central rider list - update here to change available riders across the app
+const RIDERS = ['Rider1','Rider2','Rider3','Rider4'];
+
+function riderOptionsHtml(selected) {
+  const sel = String(selected || '').trim();
+  const opts = [`<option value="" ${!sel || sel === 'Unassigned' ? 'selected' : ''}>Unassigned</option>`];
+  RIDERS.forEach(r => opts.push(`<option value="${r}" ${r === sel ? 'selected' : ''}>${r}</option>`));
+  return opts.join('\n');
+}
+
 let orders = [];
 let editingId = null;
 
@@ -302,17 +318,28 @@ function getMonthLabel(monthKey = '') {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+function formatDate(dateLike) {
+  const d = dateLike instanceof Date ? dateLike : new Date(dateLike || Date.now());
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+         d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
 function normalizeOrder(o = {}) {
   const dt = o.createdAt || o.updatedAt || o.created || o.updated || new Date().toISOString();
   const monthKey = o.monthKey || getMonthKey(dt);
   const { gps, lat, lng } = parseGpsText(o.gps || `${o.lat || ''}, ${o.lng || ''}`);
+  const createdAt = o.createdAt || dt;
+  const updatedAt = o.updatedAt || dt;
   return {
     ...o,
     rider: o.rider || 'Unassigned',
     status: (o.status || 'pending').toLowerCase(),
     monthKey,
-    createdAt: o.createdAt || dt,
-    updatedAt: o.updatedAt || dt,
+    createdAt,
+    updatedAt,
+    created: o.created || formatDate(createdAt),
+    updated: o.updated || formatDate(updatedAt),
     gps,
     lat,
     lng,
@@ -399,6 +426,7 @@ function mapSheetRowToOrder(row = {}) {
     area: normalized.area || normalized.deliveryarea || '',
     gps: normalized.gps || normalized.coordinates || normalized.gpscoordinates || '',
     landmark: normalized.landmark || '',
+    rider: normalized.rider || normalized.deliveryrider || normalized['delivery rider'] || '',
     status: ['pending', 'picked', 'enroute', 'delivered'].includes(status) ? status : 'pending',
     special: normalized.special || normalized.specialrequests || '',
     created: normalized.created || normalized.date || now(),
@@ -469,9 +497,7 @@ function save() {
 }
 function uid()  { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now()  {
-  const d = new Date();
-  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' +
-         d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  return formatDate(new Date());
 }
 function timestamp() { return new Date().toISOString(); }
 
@@ -497,6 +523,7 @@ function getFormData() {
     landmark: document.getElementById('f-landmark').value.trim(),
     status:   document.getElementById('f-status').value,
     special:  document.getElementById('f-special').value.trim(),
+    rider:    document.getElementById('f-rider').value.trim(),
   };
 }
 
@@ -510,11 +537,12 @@ function fillForm(o) {
   document.getElementById('f-landmark').value = o.landmark || '';
   document.getElementById('f-status').value   = o.status || 'pending';
   document.getElementById('f-special').value  = o.special || '';
+  if (document.getElementById('f-rider')) document.getElementById('f-rider').value = o.rider && o.rider !== 'Unassigned' ? o.rider : '';
 }
 
 function clearForm() {
-  ['f-initials','f-name','f-contact','f-meal','f-area','f-gps','f-landmark','f-special']
-    .forEach(id => document.getElementById(id).value = '');
+  ['f-initials','f-name','f-contact','f-meal','f-area','f-gps','f-landmark','f-special','f-rider']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('f-status').value = 'pending';
   editingId = null;
   document.getElementById('save-feedback').style.display = 'none';
@@ -612,7 +640,7 @@ function renderCSList() {
       <table class="orders-table">
         <thead><tr>
           <th>Initials</th><th>Customer</th><th>Meal</th>
-          <th>Area / Landmark</th><th>GPS Coordinates</th>
+          <th>Area / Landmark</th><th>GPS Coordinates</th><th>Rider</th>
           <th>Status</th><th>Updated</th><th></th>
         </tr></thead>
         <tbody>
@@ -630,6 +658,11 @@ function renderCSList() {
               <span style="color:var(--mid);font-size:11px;">${o.landmark||''}</span>
             </td>
             <td class="coords-cell">${gpsLink(o)}</td>
+            <td style="font-size:12px;white-space:nowrap;">${/* rider select */''}
+              <select class="cs-rider-select" data-order-id="${o.id}" onchange="updateRiderAssignment(this.dataset.orderId, this.value)" style="padding:6px;border-radius:6px;border:1px solid var(--border);font-weight:600;">
+                ${riderOptionsHtml(o.rider)}
+              </select>
+            </td>
             <td>${statusPill(o.status)}</td>
             <td style="font-size:11px;color:var(--mid);white-space:nowrap;">${o.updated||o.created||''}</td>
             <td>
@@ -647,6 +680,17 @@ function renderCSList() {
 function updateRiderStatus(orderId, status) {
   const order = orders.find(item => item.id === orderId);
   if (!order) return;
+
+  // If there is an assignment select in the Rider View for this order, use its value
+  // so status updates performed by a rider also record who performed the update.
+  try {
+    const sel = document.querySelector(`select.rider-select[data-order-id="${orderId}"]`);
+    if (sel && sel.value) {
+      order.rider = sel.value;
+    }
+  } catch (e) {
+    // ignore DOM issues
+  }
 
   order.status = ['picked', 'enroute', 'delivered'].includes(status) ? status : 'pending';
   order.updated = now();
@@ -694,12 +738,9 @@ function renderRiderView() {
         <div class="rider-card status-${o.status}">
           <div class="rider-assignment-controls">
             <div class="rider-status-label">Assign Rider</div>
-            <select class="rider-select" data-order-id="${o.id}" onchange="updateRiderAssignment(this.dataset.orderId, this.value)">
-              <option value="Rider1" ${o.rider === 'Rider1' ? 'selected' : ''}>Rider1</option>
-              <option value="Rider2" ${o.rider === 'Rider2' ? 'selected' : ''}>Rider2</option>
-              <option value="Rider3" ${o.rider === 'Rider3' ? 'selected' : ''}>Rider3</option>
-              <option value="Rider4" ${o.rider === 'Rider4' ? 'selected' : ''}>Rider4</option>
-            </select>
+              <select class="rider-select" data-order-id="${o.id}" onchange="updateRiderAssignment(this.dataset.orderId, this.value)">
+                ${riderOptionsHtml(o.rider)}
+              </select>
           </div>
           <div class="rider-card-top">
             <div>
@@ -751,6 +792,9 @@ function renderRiderView() {
   renderRiderView();
   setInterval(loadOrdersFromGoogleSheet, 30000);
 })();
+
+// ensure the form rider select is populated when the script runs at end of body
+try { const fr = document.getElementById('f-rider'); if (fr) fr.innerHTML = riderOptionsHtml(''); } catch(e) {}
 </script>
 </body>
 </html>
