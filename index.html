@@ -654,9 +654,16 @@ function statusPill(s) { return `<span class="status-pill status-${s}">${STATUS_
 function gpsLink(o) {
   const gps = o.gps || (o.lat && o.lng ? `${o.lat}, ${o.lng}` : '');
   if (!gps) return '—';
-  const [lat, lng] = gps.split(',').map(part => part.trim());
+
+  const cleaned = String(gps).replace(/[()]/g, '').trim();
+  const parts = cleaned.split(',').map(part => part.trim()).filter(Boolean);
+  const lat = parts[0];
+  const lng = parts[1];
+
   if (!lat || !lng) return gps;
-  return `<a class="coords-link" href="https://maps.google.com/?q=${lat},${lng}" target="_blank" rel="noopener noreferrer">${gps}</a>`;
+
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  return `<a class="coords-link" href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer">${gps}</a>`;
 }
 
 function renderCSList() {
