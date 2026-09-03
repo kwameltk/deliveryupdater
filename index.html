@@ -28,7 +28,7 @@
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--dark); min-height: 100vh; }
 
   .header { background: var(--dark); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .logo { width: 36px; height: 36px; background: var(--amber); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: var(--dark); flex-shrink: 0; }
   .header h1 { font-size: 15px; font-weight: 600; color: #fff; }
   .header-sub { font-size: 11px; color: #9CA3AF; }
@@ -73,7 +73,8 @@
   .saved-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--green); background: var(--green-light); border: 1px solid #6EE7B7; padding: 3px 9px; border-radius: 20px; }
   .saved-tag::before { content: '✓'; font-weight: 700; }
 
-  .orders-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .orders-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .orders-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 12px; }
   .orders-table th { background: var(--bg); padding: 8px 10px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mid); border-bottom: 1px solid var(--border); }
   .orders-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .orders-table tr:last-child td { border-bottom: none; }
@@ -144,10 +145,29 @@
   .sync-status.warning { color: #92400E; background: #FEF3C7; border-color: #FCD34D; }
 
   @media(max-width:600px) {
+    .header { padding: 12px; align-items: stretch; flex-direction: column; }
+    .header-left { align-items: flex-start; }
+    .header-left > div:last-child { min-width: 0; }
+    .header-left > div:last-child > div { overflow-wrap: anywhere; }
+    .tab-toggle { width: 100%; }
+    .tab-btn { flex: 1 1 0; min-height: 40px; }
+    .main { padding: 12px; }
+    .card { padding: 12px; }
     .form-grid, .form-grid.three { grid-template-columns: 1fr; }
     .rider-detail-grid { grid-template-columns: 1fr; }
-    .header h1 { font-size: 13px; }
-    .tab-btn { padding: 5px 10px; font-size: 11px; }
+    input, select, textarea { width: 100%; min-height: 42px; font-size: 16px; }
+    .btn-row { flex-wrap: wrap; }
+    .btn-row .btn { min-height: 42px; }
+    .rider-header { padding: 12px; align-items: flex-start; gap: 10px; }
+    .rider-header .btn { flex-shrink: 0; }
+    .rider-card { padding: 12px; }
+    .rider-card-top { gap: 8px; }
+    .rider-card-name { overflow-wrap: anywhere; }
+    .rider-card-meta { line-height: 1.5; }
+    .rider-status-actions { flex-direction: column; align-items: stretch; max-width: none; }
+    .rider-select, .rider-status-select { min-width: 0; width: 100%; min-height: 42px; }
+    .rider-status-actions .btn { width: 100%; min-height: 42px; }
+    .orders-table-wrap { margin: 0; }
   }
 </style>
 </head>
@@ -256,7 +276,7 @@
       </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
-      <div id="orders-list"></div>
+      <div class="orders-table-wrap" id="orders-list"></div>
     </div>
 
   </div>
@@ -275,12 +295,23 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const GOOGLE_SHEET_DOC_ID = '1NOMpnZpyowoC1rGVjP-rD5Udbr3DazVjHds2bioH-4';
 const GOOGLE_SHEET_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_DOC_ID}/gviz/tq?tqx=out:json&sheet=Sheet1&headers=1`;
 const STATUS_ORDER = { pending: 0, picked: 1, enroute: 2, delivered: 3 };
 const STORAGE_MONTH_PREFIX = 'kfd_orders_month_';
 const STORAGE_MONTH_LIST = 'kfd_order_month_keys';
+const SUPABASE_URL = 'PASTE_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'PASTE_SUPABASE_ANON_KEY';
+const SUPABASE_CONFIGURED = Boolean(
+  window.supabase &&
+  SUPABASE_URL &&
+  SUPABASE_ANON_KEY &&
+  SUPABASE_URL !== 'PASTE_SUPABASE_URL' &&
+  SUPABASE_ANON_KEY !== 'PASTE_SUPABASE_ANON_KEY'
+);
+const supabase = SUPABASE_CONFIGURED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } }) : null;
 
 // Central rider list - update here to change available riders across the app
 const RIDERS = ['Rider1','Rider2','Rider3','Rider4'];
@@ -326,18 +357,23 @@ function formatDate(dateLike) {
 }
 
 function normalizeOrder(o = {}) {
-  const dt = o.createdAt || o.updatedAt || o.created || o.updated || new Date().toISOString();
-  const monthKey = o.monthKey || getMonthKey(dt);
+  const rawCreated = o.createdAt || o.updatedAt || o.created_at || o.updated_at || o.created || o.updated || new Date().toISOString();
+  const dt = rawCreated instanceof Date ? rawCreated.toISOString() : rawCreated;
+  const monthKey = o.monthKey || o.month_key || getMonthKey(dt);
   const { gps, lat, lng } = parseGpsText(o.gps || `${o.lat || ''}, ${o.lng || ''}`);
-  const createdAt = o.createdAt || dt;
-  const updatedAt = o.updatedAt || dt;
+  const createdAt = o.createdAt || o.created_at || dt;
+  const updatedAt = o.updatedAt || o.updated_at || dt;
   return {
     ...o,
+    id: o.id || uid(),
     rider: o.rider || 'Unassigned',
     status: (o.status || 'pending').toLowerCase(),
     monthKey,
+    month_key: o.month_key || monthKey,
     createdAt,
+    created_at: o.created_at || createdAt,
     updatedAt,
+    updated_at: o.updated_at || updatedAt,
     created: o.created || formatDate(createdAt),
     updated: o.updated || formatDate(updatedAt),
     gps,
@@ -398,7 +434,6 @@ function loadStoredOrders() {
 
   const legacyOrders = Array.isArray(safeReadJson('kfd_orders', [])) ? safeReadJson('kfd_orders', []).map(normalizeOrder) : [];
   orders = legacyOrders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-  save();
 }
 
 function normalizeSheetKey(key = '') {
@@ -505,7 +540,78 @@ async function loadOrdersFromGoogleSheet() {
   }
 }
 
-function save() {
+function refreshOrdersFromLocalStorage() {
+  const previousSnapshot = JSON.stringify(orders);
+  loadStoredOrders();
+  if (JSON.stringify(orders) !== previousSnapshot) {
+    renderCSList();
+    renderRiderView();
+  }
+}
+
+async function saveToSupabase(orderList = []) {
+  if (!supabase) return false;
+
+  const rows = orderList.map(order => ({
+    id: order.id,
+    initials: order.initials || '',
+    name: order.name || '',
+    contact: order.contact || '',
+    meal: order.meal || '',
+    area: order.area || '',
+    gps: order.gps || (order.lat && order.lng ? `${order.lat}, ${order.lng}` : ''),
+    landmark: order.landmark || '',
+    status: order.status || 'pending',
+    special: order.special || '',
+    rider: order.rider || 'Unassigned',
+    created_at: order.createdAt || order.created_at || timestamp(),
+    updated_at: order.updatedAt || order.updated_at || timestamp(),
+    month_key: order.monthKey || order.month_key || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString()),
+  }));
+
+  const { error } = await supabase.from('orders').upsert(rows, { onConflict: 'id' });
+  if (error) {
+    console.error('Supabase save failed:', error);
+    throw error;
+  }
+
+  return true;
+}
+
+async function loadOrdersFromSupabase() {
+  if (!supabase) return false;
+
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Supabase load failed:', error);
+    return false;
+  }
+
+  orders = (data || []).map(row => normalizeOrder({
+    ...row,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    monthKey: row.month_key,
+  }));
+  renderCSList();
+  renderRiderView();
+  return true;
+}
+
+async function save() {
+  if (supabase) {
+    try {
+      await saveToSupabase(orders);
+      return;
+    } catch (error) {
+      console.warn('Supabase save failed; falling back to local storage.', error);
+    }
+  }
+
   if (!storageIsAvailable()) {
     return;
   }
@@ -591,7 +697,7 @@ function clearForm() {
   document.getElementById('save-feedback').style.display = 'none';
 }
 
-function saveOrder() {
+async function saveOrder() {
   const d = getFormData();
   if (!d.initials || !d.name) { alert('Order Initials and Customer Name are required.'); return; }
 
@@ -625,7 +731,8 @@ function saveOrder() {
   }
 
   orders = orders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-  save(); clearForm();
+  await save();
+  clearForm();
   const fb = document.getElementById('save-feedback');
   fb.style.display = 'inline-flex';
   setTimeout(() => fb.style.display = 'none', 2200);
@@ -641,10 +748,10 @@ function editOrder(id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function deleteOrder(id) {
+async function deleteOrder(id) {
   if (!confirm('Remove this order from the tracker permanently?')) return;
   orders = orders.filter(o => o.id !== id);
-  save();
+  await save();
   renderCSList();
   renderRiderView();
 }
@@ -727,12 +834,10 @@ function renderCSList() {
     </div>`).join('');
 }
 
-function updateRiderStatus(orderId, status) {
+async function updateRiderStatus(orderId, status) {
   const order = orders.find(item => item.id === orderId);
   if (!order) return;
 
-  // If there is an assignment select in the Rider View for this order, use its value
-  // so status updates performed by a rider also record who performed the update.
   try {
     const sel = document.querySelector(`select.rider-select[data-order-id="${orderId}"]`);
     if (sel && sel.value) {
@@ -746,12 +851,12 @@ function updateRiderStatus(orderId, status) {
   order.updated = now();
   order.updatedAt = timestamp();
   order.monthKey = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
-  save();
+  await save();
   renderCSList();
   renderRiderView();
 }
 
-function updateRiderAssignment(orderId, rider) {
+async function updateRiderAssignment(orderId, rider) {
   const order = orders.find(item => item.id === orderId);
   if (!order) return;
 
@@ -759,7 +864,7 @@ function updateRiderAssignment(orderId, rider) {
   order.updated = now();
   order.updatedAt = timestamp();
   order.monthKey = order.monthKey || getMonthKey(order.createdAt || order.updatedAt || new Date().toISOString());
-  save();
+  await save();
   renderCSList();
   renderRiderView();
 }
@@ -835,13 +940,35 @@ function renderRiderView() {
   `).join('');
 }
 
+window.addEventListener('storage', (event) => {
+  if (event.key && (event.key === STORAGE_MONTH_LIST || event.key === 'kfd_orders' || event.key.startsWith(STORAGE_MONTH_PREFIX))) {
+    refreshOrdersFromLocalStorage();
+  }
+});
+
+async function initSupabaseRealtime() {
+  if (!supabase) return;
+
+  const channel = supabase.channel('orders-live');
+  channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, () => {
+    loadOrdersFromSupabase();
+  }).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, () => {
+    loadOrdersFromSupabase();
+  }).subscribe();
+}
+
 (async function initTracker() {
   try {
     loadStoredOrders();
-    await loadOrdersFromGoogleSheet();
+    if (supabase) {
+      await loadOrdersFromSupabase();
+      await initSupabaseRealtime();
+    } else {
+      await loadOrdersFromGoogleSheet();
+    }
     renderCSList();
     renderRiderView();
-    setInterval(loadOrdersFromGoogleSheet, 30000);
+    if (!supabase) setInterval(loadOrdersFromGoogleSheet, 30000);
   } catch (error) {
     console.error('Tracker initialization failed:', error);
     const main = document.querySelector('.main');
