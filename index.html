@@ -198,15 +198,11 @@
     <div class="section-label">Add / Update Order</div>
     <div class="card">
 
-      <!-- Row 1: Initials, Name, Contact -->
-      <div class="form-grid three">
+      <!-- Row 1: Initials and Contact -->
+      <div class="form-grid">
         <div class="form-group">
           <label>Order Initials *</label>
           <input id="f-initials" type="text" placeholder="e.g. K.O" maxlength="6">
-        </div>
-        <div class="form-group">
-          <label>Customer Name *</label>
-          <input id="f-name" type="text" placeholder="Full name">
         </div>
         <div class="form-group">
           <label>Contact Number</label>
@@ -226,21 +222,17 @@
         </div>
       </div>
 
-      <!-- Row 3: GPS Coordinates, Landmark -->
+      <!-- Row 3: GPS Coordinates -->
       <div class="form-grid" style="margin-top:10px;">
-        <div class="form-group">
+        <div class="form-group full">
           <label>GPS Coordinates</label>
           <input id="f-gps" type="text" placeholder="e.g. 6.5880, -0.4250">
           <div class="gps-hint">Paste the full GPS coordinate from the customer's pin</div>
         </div>
-        <div class="form-group">
-          <label>Landmark</label>
-          <input id="f-landmark" type="text" placeholder="e.g. Behind St. Peter's Church">
-        </div>
       </div>
 
-      <!-- Row 4: Status, Special Requests -->
-      <div class="form-grid" style="margin-top:10px;grid-template-columns:1fr 1fr 1fr;">
+      <!-- Row 4: Status and Rider -->
+      <div class="form-grid" style="margin-top:10px;">
         <div class="form-group">
           <label>Delivery Status *</label>
           <select id="f-status">
@@ -249,10 +241,6 @@
             <option value="enroute">🛵 En Route — On the Way</option>
             <option value="delivered">✅ Delivered</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label>Special Requests</label>
-          <input id="f-special" type="text" placeholder="e.g. No shito, light soup please">
         </div>
         <div class="form-group">
           <label>Assigned Rider</label>
@@ -318,7 +306,7 @@ const SUPABASE_CONFIGURED = Boolean(
 const supabase = SUPABASE_CONFIGURED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } }) : null;
 
 // Central rider list - update here to change available riders across the app
-const RIDERS = ['Rider1','Rider2','Rider3','Rider4'];
+const RIDERS = ['Rider 1', 'Rider 2', 'Rider 3'];
 
 function riderOptionsHtml(selected) {
   const sel = String(selected || '').trim();
@@ -678,35 +666,29 @@ function getFormData() {
   const { gps, lat, lng } = parseGpsText(document.getElementById('f-gps').value);
   return {
     initials: document.getElementById('f-initials').value.trim().toUpperCase(),
-    name:     document.getElementById('f-name').value.trim(),
     contact:  document.getElementById('f-contact').value.trim(),
     meal:     document.getElementById('f-meal').value.trim(),
     area:     document.getElementById('f-area').value.trim(),
     gps,
     lat,
     lng,
-    landmark: document.getElementById('f-landmark').value.trim(),
     status:   document.getElementById('f-status').value,
-    special:  document.getElementById('f-special').value.trim(),
     rider:    document.getElementById('f-rider').value.trim(),
   };
 }
 
 function fillForm(o) {
   document.getElementById('f-initials').value = o.initials || '';
-  document.getElementById('f-name').value     = o.name || '';
   document.getElementById('f-contact').value  = o.contact || '';
   document.getElementById('f-meal').value     = o.meal || '';
   document.getElementById('f-area').value     = o.area || '';
   document.getElementById('f-gps').value      = o.gps || (o.lat && o.lng ? `${o.lat}, ${o.lng}` : '');
-  document.getElementById('f-landmark').value = o.landmark || '';
   document.getElementById('f-status').value   = o.status || 'pending';
-  document.getElementById('f-special').value  = o.special || '';
   if (document.getElementById('f-rider')) document.getElementById('f-rider').value = o.rider && o.rider !== 'Unassigned' ? o.rider : '';
 }
 
 function clearForm() {
-  ['f-initials','f-name','f-contact','f-meal','f-area','f-gps','f-landmark','f-special','f-rider']
+  ['f-initials','f-contact','f-meal','f-area','f-gps','f-rider']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('f-status').value = 'pending';
   editingId = null;
@@ -715,7 +697,7 @@ function clearForm() {
 
 async function saveOrder() {
   const d = getFormData();
-  if (!d.initials || !d.name) { alert('Order Initials and Customer Name are required.'); return; }
+  if (!d.initials) { alert('Order Initials are required.'); return; }
 
   const nowStamp = timestamp();
   const monthKey = getMonthKey(nowStamp);
@@ -812,24 +794,17 @@ function renderCSList() {
       <div class="month-group-title">${getMonthLabel(monthKey)}</div>
       <table class="orders-table">
         <thead><tr>
-          <th>Initials</th><th>Customer</th><th>Meal</th>
-          <th>Area / Landmark</th><th>GPS Coordinates</th><th>Rider</th>
+          <th>Initials</th><th>Meal</th>
+          <th>Delivery Area</th><th>GPS Coordinates</th><th>Rider</th>
           <th>Status</th><th>Updated</th><th></th>
         </tr></thead>
         <tbody>
           ${monthOrders.map(o => `
           <tr>
             <td><span class="initials-badge">${o.initials}</span></td>
-            <td>
-              <div style="font-weight:500;font-size:13px;">${o.name}</div>
-              <div style="font-size:11px;color:var(--mid);">${o.contact||'—'}</div>
-            </td>
             <td style="font-size:12px;max-width:120px;">${o.meal||'—'}
-              ${o.special?`<div style="font-size:11px;color:#92400E;margin-top:2px;">⚠ ${o.special}</div>`:''}
             </td>
-            <td style="font-size:12px;">${o.area||'—'}<br>
-              <span style="color:var(--mid);font-size:11px;">${o.landmark||''}</span>
-            </td>
+            <td style="font-size:12px;">${o.area||'—'}</td>
             <td class="coords-cell">${gpsLink(o)}</td>
             <td style="font-size:12px;white-space:nowrap;">${/* rider select */''}
               <select class="cs-rider-select" data-order-id="${o.id}" onchange="updateRiderAssignment(this.dataset.orderId, this.value)" style="padding:6px;border-radius:6px;border:1px solid var(--border);font-weight:600;">
@@ -915,7 +890,7 @@ function renderRiderView() {
           </div>
           <div class="rider-card-top">
             <div>
-              <div class="rider-card-name">${o.name} <span class="initials-badge" style="font-size:12px;">${o.initials}</span></div>
+              <div class="rider-card-name">Order <span class="initials-badge" style="font-size:12px;">${o.initials}</span></div>
               <div class="rider-card-meta">${o.contact ? '📞 ' + o.contact : ''} &nbsp; 🕐 Updated: ${o.updated || o.created || '—'}</div>
             </div>
             ${statusPill(o.status)}
@@ -930,15 +905,10 @@ function renderRiderView() {
               <div class="rider-detail-value">${o.area || '—'}</div>
             </div>
             <div class="rider-detail">
-              <div class="rider-detail-label">🏠 Landmark</div>
-              <div class="rider-detail-value">${o.landmark || '—'}</div>
-            </div>
-            <div class="rider-detail">
               <div class="rider-detail-label">🗺 GPS Coordinates</div>
               <div class="rider-detail-value rider-coords">${gpsLink(o)}</div>
             </div>
           </div>
-          ${o.special ? `<div class="rider-special"><strong>⚠ Special Request</strong>${o.special}</div>` : ''}
           <div class="rider-status-controls">
             <div class="rider-status-label">Update Delivery Stage</div>
             <div class="rider-status-actions">
