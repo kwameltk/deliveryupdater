@@ -254,7 +254,7 @@
       </div>
 
       <div class="btn-row" style="margin-top:14px;">
-        <button type="button" id="save-order-button" class="btn btn-primary">💾 Save Order</button>
+        <button type="button" id="save-order-button" class="btn btn-primary" onclick="saveOrder(event)">💾 Save Order</button>
         <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
         <span id="save-feedback" style="display:none;" class="saved-tag">Saved!</span>
       </div>
@@ -699,7 +699,10 @@ function clearForm() {
   document.getElementById('save-feedback').style.display = 'none';
 }
 
-async function saveOrder() {
+async function saveOrder(event) {
+  if (event) event.preventDefault();
+  if (event && event.__kfdSaveHandled) return;
+  if (event) event.__kfdSaveHandled = true;
   try {
     const d = getFormData();
     if (!d.initials) { alert('Order Initials are required.'); return; }
