@@ -254,8 +254,8 @@
       </div>
 
       <div class="btn-row" style="margin-top:14px;">
-        <button class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
-        <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+        <button type="button" class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
+        <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
         <span id="save-feedback" style="display:none;" class="saved-tag">Saved!</span>
       </div>
       <div id="sheet-sync-status" class="sync-status">Waiting for Google Sheet sync…</div>
@@ -613,14 +613,14 @@ async function save() {
   if (supabase) {
     try {
       await saveToSupabase(orders);
-      return;
+      return true;
     } catch (error) {
       console.warn('Supabase save failed; falling back to local storage.', error);
     }
   }
 
   if (!storageIsAvailable()) {
-    return;
+    return false;
   }
 
   const persistedKeys = Array.isArray(safeReadJson(STORAGE_MONTH_LIST, [])) ? safeReadJson(STORAGE_MONTH_LIST, []) : [];
@@ -650,6 +650,7 @@ async function save() {
   });
 
   safeWriteJson('kfd_orders', orders.map(normalizeOrder));
+  return true;
 }
 function uid()  { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function now()  {
@@ -699,46 +700,57 @@ function clearForm() {
 }
 
 async function saveOrder() {
-  const d = getFormData();
-  if (!d.initials) { alert('Order Initials are required.'); return; }
+  try {
+    const d = getFormData();
+    if (!d.initials) { alert('Order Initials are required.'); return; }
 
-  const nowStamp = timestamp();
-  const monthKey = getMonthKey(nowStamp);
-  const current = orders.find(o => o.id === editingId);
+    const nowStamp = timestamp();
+    const monthKey = getMonthKey(nowStamp);
+    const current = orders.find(o => o.id === editingId);
 
-  if (editingId) {
-    const idx = orders.findIndex(o => o.id === editingId);
-    if (idx > -1) {
-      orders[idx] = normalizeOrder({
-        ...orders[idx],
+    if (editingId) {
+      const idx = orders.findIndex(o => o.id === editingId);
+      if (idx > -1) {
+        orders[idx] = normalizeOrder({
+          ...orders[idx],
+          ...d,
+          monthKey: current?.monthKey || monthKey,
+          createdAt: current?.createdAt || nowStamp,
+          updatedAt: nowStamp,
+          created: current?.created || now(),
+          updated: now(),
+        });
+      }
+    } else {
+      orders.unshift(normalizeOrder({
+        id: uid(),
         ...d,
-        monthKey: current?.monthKey || monthKey,
-        createdAt: current?.createdAt || nowStamp,
+        monthKey,
+        createdAt: nowStamp,
         updatedAt: nowStamp,
-        created: current?.created || now(),
+        created: now(),
         updated: now(),
-      });
+      }));
     }
-  } else {
-    orders.unshift(normalizeOrder({
-      id: uid(),
-      ...d,
-      monthKey,
-      createdAt: nowStamp,
-      updatedAt: nowStamp,
-      created: now(),
-      updated: now(),
-    }));
-  }
 
-  orders = orders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-  await save();
-  clearForm();
-  const fb = document.getElementById('save-feedback');
-  fb.style.display = 'inline-flex';
-  setTimeout(() => fb.style.display = 'none', 2200);
-  renderCSList();
-  renderRiderView();
+    orders = orders.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    const saved = await save();
+    if (!saved) {
+      setSyncStatus('Order could not be saved. Check browser storage or configure Supabase before trying again.', 'error');
+      return;
+    }
+
+    clearForm();
+    const fb = document.getElementById('save-feedback');
+    fb.style.display = 'inline-flex';
+    setSyncStatus(supabase ? 'Order saved to shared Supabase data.' : 'Order saved on this device only. Configure Supabase to share it with riders.', supabase ? 'success' : 'warning');
+    setTimeout(() => fb.style.display = 'none', 2200);
+    renderCSList();
+    renderRiderView();
+  } catch (error) {
+    console.error('Save Order failed:', error);
+    setSyncStatus('Order could not be saved. Please check the order fields and try again.', 'error');
+  }
 }
 
 function editOrder(id) {
