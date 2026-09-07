@@ -254,7 +254,7 @@
       </div>
 
       <div class="btn-row" style="margin-top:14px;">
-        <button type="button" class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
+        <button type="button" id="save-order-button" class="btn btn-primary">💾 Save Order</button>
         <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
         <span id="save-feedback" style="display:none;" class="saved-tag">Saved!</span>
       </div>
@@ -991,6 +991,12 @@ async function initSupabaseRealtime() {
 
 // ensure the form rider select is populated when the script runs at end of body
 try { const fr = document.getElementById('f-rider'); if (fr) fr.innerHTML = riderOptionsHtml(''); } catch(e) {}
+try {
+  const saveButton = document.getElementById('save-order-button');
+  if (saveButton) saveButton.addEventListener('click', saveOrder);
+} catch (error) {
+  console.error('Could not attach Save Order handler:', error);
+}
 </script>
 </body>
 </html>
