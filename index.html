@@ -103,7 +103,8 @@
   .rider-card.status-enroute   { border-left-color: var(--purple); }
   .rider-card.status-delivered { border-left-color: var(--green); opacity: 0.7; }
 
-  .rider-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .rider-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .rider-card-top > div:first-child { min-width: 0; }
   .rider-card-name { font-size: 15px; font-weight: 600; }
   .rider-card-meta { font-size: 12px; color: var(--mid); margin-top: 2px; }
   .rider-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -143,6 +144,7 @@
   }
   .sync-status.success { color: #065F46; background: #ECFDF5; border-color: #A7F3D0; }
   .sync-status.warning { color: #92400E; background: #FEF3C7; border-color: #FCD34D; }
+  .sync-status.error { color: #991B1B; background: #FEF2F2; border-color: #FCA5A5; }
 
   @media(max-width:600px) {
     .header { padding: 12px; align-items: stretch; flex-direction: column; }
@@ -162,6 +164,7 @@
     .rider-header .btn { flex-shrink: 0; }
     .rider-card { padding: 12px; }
     .rider-card-top { gap: 8px; }
+    .rider-card-top .status-pill { flex: 0 0 auto; }
     .rider-card-name { overflow-wrap: anywhere; }
     .rider-card-meta { line-height: 1.5; }
     .rider-status-actions { flex-direction: column; align-items: stretch; max-width: none; }
@@ -271,7 +274,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap;">
       <div class="section-label" style="margin:0;">All Orders</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="loadOrdersFromGoogleSheet()" style="font-size:12px;padding:6px 12px;">↻ Sync Sheet</button>
+        <button class="btn btn-secondary" onclick="syncOrders()" style="font-size:12px;padding:6px 12px;">↻ Sync Orders</button>
         <span id="order-count" style="font-size:12px;color:var(--mid);"></span>
       </div>
     </div>
@@ -286,10 +289,11 @@
     <div class="rider-header">
       <div>
         <div class="rider-title">🛵 Your Deliveries</div>
-        <div class="rider-sub"><span class="live-dot"></span>Live — updated by Customer Service</div>
+        <div class="rider-sub"><span class="live-dot"></span>Shared delivery details</div>
       </div>
-      <button class="btn btn-secondary" onclick="renderRiderView()" style="font-size:12px;padding:6px 12px;">↻ Refresh</button>
+      <button class="btn btn-secondary" onclick="syncOrders()" style="font-size:12px;padding:6px 12px;">↻ Refresh</button>
     </div>
+    <div id="rider-sync-status" class="sync-status">Checking shared order data…</div>
     <div id="rider-cards"></div>
   </div>
 
@@ -505,11 +509,23 @@ function mapSheetRowToOrder(row = {}) {
 }
 
 function setSyncStatus(message, type = 'warning') {
-  const statusEl = document.getElementById('sheet-sync-status');
-  if (!statusEl) return;
-  statusEl.className = 'sync-status ' + type;
-  statusEl.textContent = message;
-  statusEl.style.display = 'block';
+  ['sheet-sync-status', 'rider-sync-status'].forEach(id => {
+    const statusEl = document.getElementById(id);
+    if (!statusEl) return;
+    statusEl.className = 'sync-status ' + type;
+    statusEl.textContent = message;
+    statusEl.style.display = 'block';
+  });
+}
+
+async function syncOrders() {
+  if (supabase) {
+    const loaded = await loadOrdersFromSupabase();
+    setSyncStatus(loaded ? 'Shared orders refreshed.' : 'Shared orders could not be loaded.', loaded ? 'success' : 'error');
+    return;
+  }
+
+  setSyncStatus('Shared sync is not configured. Add the Supabase URL and anon key before using this page on multiple phones.', 'error');
 }
 
 async function loadOrdersFromGoogleSheet() {
@@ -536,7 +552,7 @@ async function loadOrdersFromGoogleSheet() {
     }
   } catch (error) {
     console.warn('Falling back to local tracker data because the public Google Sheet could not be loaded.', error);
-    setSyncStatus('The public sheet could not be fetched from this browser context. Using the local tracker copy for now.', 'warning');
+    setSyncStatus('Shared sync is not configured. This browser is using its own local copy, so other phones will not see new orders.', 'error');
   }
 }
 
@@ -964,11 +980,14 @@ async function initSupabaseRealtime() {
       await loadOrdersFromSupabase();
       await initSupabaseRealtime();
     } else {
-      await loadOrdersFromGoogleSheet();
+      setSyncStatus('Shared sync is not configured. Add the Supabase URL and anon key before using this page on multiple phones.', 'error');
     }
     renderCSList();
     renderRiderView();
-    if (!supabase) setInterval(loadOrdersFromGoogleSheet, 30000);
+    if (new URLSearchParams(window.location.search).get('view') === 'rider') {
+      const riderButton = Array.from(document.querySelectorAll('.tab-btn')).find(button => button.textContent.includes('Rider View'));
+      if (riderButton) switchTab('rider', riderButton);
+    }
   } catch (error) {
     console.error('Tracker initialization failed:', error);
     const main = document.querySelector('.main');
