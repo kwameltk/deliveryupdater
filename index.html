@@ -1000,9 +1000,15 @@ try {
   console.error('Could not attach Save Order handler:', error);
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (() => {
   const STORAGE_KEY = 'kfd_tracker_orders_v2';
+  const SHARED_DB_URL = 'PASTE_SUPABASE_URL';
+  const SHARED_DB_KEY = 'PASTE_SUPABASE_ANON_KEY';
+  const sharedDb = window.supabase && SHARED_DB_URL !== 'PASTE_SUPABASE_URL' && SHARED_DB_KEY !== 'PASTE_SUPABASE_ANON_KEY'
+    ? window.supabase.createClient(SHARED_DB_URL, SHARED_DB_KEY, { auth: { persistSession: false } })
+    : null;
   const RIDER_NAMES = ['Rider 1', 'Rider 2', 'Rider 3'];
   const STATUS_LABELS = { pending: 'Pending', picked: 'Picked Up', enroute: 'En Route', delivered: 'Delivered' };
   let reliableOrders = [];
@@ -1028,6 +1034,44 @@ try {
     } catch (error) {
       return false;
     }
+  }
+
+  async function loadSharedOrders() {
+    if (!sharedDb) return false;
+    const { data, error } = await sharedDb.from('orders').select('*').order('updated_at', { ascending: false });
+    if (error) throw error;
+    reliableOrders = (data || []).map(order => ({
+      id: order.id,
+      initials: order.initials || '',
+      contact: order.contact || '',
+      meal: order.meal || '',
+      area: order.area || '',
+      gps: order.gps || '',
+      rider: order.rider || '',
+      status: order.status || 'pending',
+      updatedAt: order.updated_at || new Date().toISOString()
+    }));
+    writeOrders();
+    return true;
+  }
+
+  async function saveSharedOrder(order) {
+    if (!sharedDb) return false;
+    const { error } = await sharedDb.from('orders').upsert({
+      id: order.id,
+      initials: order.initials,
+      contact: order.contact,
+      meal: order.meal,
+      area: order.area,
+      gps: order.gps,
+      rider: order.rider || 'Unassigned',
+      status: order.status,
+      updated_at: order.updatedAt,
+      created_at: order.updatedAt,
+      month_key: order.updatedAt.slice(0, 7)
+    }, { onConflict: 'id' });
+    if (error) throw error;
+    return true;
   }
 
   function setStatus(message, type = 'success') {
@@ -1105,7 +1149,7 @@ try {
     const cards = byId('rider-cards');
     if (!cards) return;
     cards.innerHTML = reliableOrders.length
-      ? reliableOrders.map(order => `<div class="rider-card status-${escapeHtml(order.status)}"><div class="rider-card-top"><div><div class="rider-card-name">Order <span class="initials-badge">${escapeHtml(order.initials)}</span></div><div class="rider-card-meta">${escapeHtml(order.contact || 'No contact')} · ${escapeHtml(formatTimestamp(order.updatedAt))}</div></div><span class="status-pill status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] || order.status)}</span></div><div class="rider-detail-grid"><div class="rider-detail"><div class="rider-detail-label">Order</div><div class="rider-detail-value">${escapeHtml(order.meal || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Delivery Area</div><div class="rider-detail-value">${escapeHtml(order.area || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Location</div><div class="rider-detail-value rider-coords">${mapLink(order.gps)}</div></div><div class="rider-detail"><div class="rider-detail-label">Assigned Rider</div><div class="rider-detail-value">${escapeHtml(order.rider || 'Unassigned')}</div></div></div></div>`).join('')
+      ? reliableOrders.map(order => `<div class="rider-card status-${escapeHtml(order.status)}"><div class="rider-card-top"><div><div class="rider-card-name">Order <span class="initials-badge">${escapeHtml(order.initials)}</span></div><div class="rider-card-meta">${escapeHtml(order.contact || 'No contact')} · ${escapeHtml(formatTimestamp(order.updatedAt))}</div></div><span class="status-pill status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] || order.status)}</span></div><div class="rider-detail-grid"><div class="rider-detail"><div class="rider-detail-label">Order</div><div class="rider-detail-value">${escapeHtml(order.meal || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Delivery Area</div><div class="rider-detail-value">${escapeHtml(order.area || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Location</div><div class="rider-detail-value rider-coords">${mapLink(order.gps)}</div></div><div class="rider-detail"><div class="rider-detail-label">Select Your Identity</div><select class="rider-select" data-action="assign" data-id="${escapeHtml(order.id)}">${riderOptions(order.rider)}</select></div></div></div>`).join('')
       : '<div class="empty-state"><div class="icon">🛵</div>No deliveries available.</div>';
   }
 
@@ -1115,7 +1159,7 @@ try {
     if (byId('f-rider')) byId('f-rider').value = '';
   }
 
-  function saveOrderReliable(event) {
+  async function saveOrderReliable(event) {
     event.preventDefault();
     const initials = byId('f-initials')?.value.trim().toUpperCase();
     if (!initials) {
@@ -1141,13 +1185,24 @@ try {
       setStatus('This browser blocked storage, so the order could not be saved.', 'error');
       return;
     }
+    if (sharedDb) {
+      try {
+        await saveSharedOrder(order);
+      } catch (error) {
+        console.error('Shared order save failed:', error);
+        setStatus('Saved on this device, but shared Supabase save failed.', 'error');
+        renderOrders();
+        renderRiderCards();
+        return;
+      }
+    }
     clearFormReliable();
     renderOrders();
     renderRiderCards();
     setStatus('Order saved. It is now visible in the delivery list below.', 'success');
   }
 
-  function updateOrder(event) {
+  async function updateOrder(event) {
     const control = event.target.closest('[data-action]');
     if (!control) return;
     const order = reliableOrders.find(item => item.id === control.dataset.id);
@@ -1156,22 +1211,53 @@ try {
     if (control.dataset.action === 'status') order.status = control.value;
     if (control.dataset.action === 'delete') {
       reliableOrders = reliableOrders.filter(item => item.id !== order.id);
+      writeOrders();
+      renderOrders();
+      renderRiderCards();
+      return;
     }
     order.updatedAt = new Date().toISOString();
     writeOrders();
+    if (sharedDb) {
+      try {
+        await saveSharedOrder(order);
+      } catch (error) {
+        console.error('Shared order update failed:', error);
+        setStatus('Updated on this device, but shared Supabase update failed.', 'error');
+      }
+    }
     renderOrders();
     renderRiderCards();
   }
 
-  function initReliableController() {
+  async function initReliableController() {
     reliableOrders = readOrders();
+    if (sharedDb) {
+      try {
+        await loadSharedOrders();
+        setStatus('Shared delivery list connected.', 'success');
+      } catch (error) {
+        console.error('Shared order load failed:', error);
+        setStatus('Could not load shared deliveries. Showing this device\'s saved copy.', 'error');
+      }
+    } else {
+      setStatus('This device is in local mode. Add Supabase credentials to share orders with riders.', 'warning');
+    }
     document.querySelectorAll('.tab-btn[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
     byId('save-order-button')?.addEventListener('click', saveOrderReliable, true);
     byId('clear-order-button')?.addEventListener('click', event => { event.preventDefault(); clearFormReliable(); });
-    byId('sync-orders-button')?.addEventListener('click', () => setStatus('Orders are loaded from this device. Configure Supabase for sharing across phones.', 'warning'));
-    byId('rider-refresh-button')?.addEventListener('click', () => { reliableOrders = readOrders(); renderRiderCards(); setStatus('Delivery list refreshed.', 'success'); });
+    byId('sync-orders-button')?.addEventListener('click', async () => {
+      if (!sharedDb) { setStatus('This device is in local mode. Add Supabase credentials to share orders with riders.', 'warning'); return; }
+      try { await loadSharedOrders(); renderOrders(); renderRiderCards(); setStatus('Shared delivery list refreshed.', 'success'); }
+      catch (error) { setStatus('Shared delivery list could not be refreshed.', 'error'); }
+    });
+    byId('rider-refresh-button')?.addEventListener('click', async () => {
+      try { if (sharedDb) await loadSharedOrders(); else reliableOrders = readOrders(); renderRiderCards(); setStatus(sharedDb ? 'Shared delivery list refreshed.' : 'Local delivery list refreshed.', sharedDb ? 'success' : 'warning'); }
+      catch (error) { setStatus('Shared delivery list could not be refreshed.', 'error'); }
+    });
     byId('orders-list')?.addEventListener('change', updateOrder);
     byId('orders-list')?.addEventListener('click', updateOrder);
+    byId('rider-cards')?.addEventListener('change', updateOrder);
     renderOrders();
     renderRiderCards();
     if (new URLSearchParams(window.location.search).get('view') === 'rider') showView('rider');
