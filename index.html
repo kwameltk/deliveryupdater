@@ -185,8 +185,8 @@
     </div>
   </div>
   <div class="tab-toggle">
-    <button class="tab-btn active" onclick="switchTab('cs', this)">CS Panel</button>
-    <button class="tab-btn" onclick="switchTab('rider', this)">Rider View</button>
+    <button type="button" class="tab-btn active" data-view="cs">CS Panel</button>
+    <button type="button" class="tab-btn" data-view="rider">Rider View</button>
   </div>
 </div>
 
@@ -254,8 +254,8 @@
       </div>
 
       <div class="btn-row" style="margin-top:14px;">
-        <button type="button" id="save-order-button" class="btn btn-primary" onclick="saveOrder(event)">💾 Save Order</button>
-        <button type="button" class="btn btn-secondary" onclick="clearForm()">Clear</button>
+        <button type="button" id="save-order-button" class="btn btn-primary">💾 Save Order</button>
+        <button type="button" id="clear-order-button" class="btn btn-secondary">Clear</button>
         <span id="save-feedback" style="display:none;" class="saved-tag">Saved!</span>
       </div>
       <div id="sheet-sync-status" class="sync-status">Waiting for Google Sheet sync…</div>
@@ -265,7 +265,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap;">
       <div class="section-label" style="margin:0;">All Orders</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="syncOrders()" style="font-size:12px;padding:6px 12px;">↻ Sync Orders</button>
+        <button type="button" id="sync-orders-button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;">↻ Sync Orders</button>
         <span id="order-count" style="font-size:12px;color:var(--mid);"></span>
       </div>
     </div>
@@ -282,7 +282,7 @@
         <div class="rider-title">🛵 Your Deliveries</div>
         <div class="rider-sub"><span class="live-dot"></span>Shared delivery details</div>
       </div>
-      <button class="btn btn-secondary" onclick="syncOrders()" style="font-size:12px;padding:6px 12px;">↻ Refresh</button>
+      <button type="button" id="rider-refresh-button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;">↻ Refresh</button>
     </div>
     <div id="rider-sync-status" class="sync-status">Checking shared order data…</div>
     <div id="rider-cards"></div>
@@ -290,8 +290,7 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
+<script type="text/plain">
 const GOOGLE_SHEET_DOC_ID = '1NOMpnZpyowoC1rGVjP-rD5Udbr3DazVjHds2bioH-4';
 const GOOGLE_SHEET_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_DOC_ID}/gviz/tq?tqx=out:json&sheet=Sheet1&headers=1`;
 const STATUS_ORDER = { pending: 0, picked: 1, enroute: 2, delivered: 3 };
@@ -1000,6 +999,187 @@ try {
 } catch (error) {
   console.error('Could not attach Save Order handler:', error);
 }
+</script>
+<script>
+(() => {
+  const STORAGE_KEY = 'kfd_tracker_orders_v2';
+  const RIDER_NAMES = ['Rider 1', 'Rider 2', 'Rider 3'];
+  const STATUS_LABELS = { pending: 'Pending', picked: 'Picked Up', enroute: 'En Route', delivered: 'Delivered' };
+  let reliableOrders = [];
+
+  const byId = id => document.getElementById(id);
+  const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[character]));
+
+  function readOrders() {
+    try {
+      const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      return Array.isArray(value) ? value : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeOrders() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(reliableOrders));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function setStatus(message, type = 'success') {
+    ['sheet-sync-status', 'rider-sync-status'].forEach(id => {
+      const element = byId(id);
+      if (!element) return;
+      element.className = `sync-status ${type}`;
+      element.textContent = message;
+      element.style.display = 'block';
+    });
+  }
+
+  function formatTimestamp(value) {
+    return new Date(value).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function mapLink(gps) {
+    const parts = String(gps || '').replace(/[()]/g, '').split(',').map(value => value.trim());
+    if (parts.length < 2 || !parts[0] || !parts[1]) return '<span>GPS not provided</span>';
+    const query = encodeURIComponent(`${parts[0]},${parts[1]}`);
+    return `<a class="coords-link" href="https://www.google.com/maps/search/?api=1&query=${query}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>`;
+  }
+
+  function riderOptions(selected) {
+    return ['<option value="">Unassigned</option>'].concat(
+      RIDER_NAMES.map(name => `<option value="${name}" ${name === selected ? 'selected' : ''}>${name}</option>`)
+    ).join('');
+  }
+
+  function showView(viewName) {
+    document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === `view-${viewName}`));
+    document.querySelectorAll('.tab-btn').forEach(button => button.classList.toggle('active', button.dataset.view === viewName));
+    if (viewName === 'rider') renderRiderCards();
+  }
+
+  function renderOrders() {
+    const list = byId('orders-list');
+    const count = byId('order-count');
+    if (!list || !count) return;
+    count.textContent = `${reliableOrders.length} order${reliableOrders.length === 1 ? '' : 's'}`;
+    if (!reliableOrders.length) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📋</div>No deliveries saved yet.</div>';
+      return;
+    }
+
+    list.innerHTML = reliableOrders.map(order => `
+      <article class="rider-card status-${escapeHtml(order.status)}" data-order-card="${escapeHtml(order.id)}">
+        <div class="rider-card-top">
+          <div>
+            <div class="rider-card-name">Order <span class="initials-badge">${escapeHtml(order.initials)}</span></div>
+            <div class="rider-card-meta">${escapeHtml(order.contact || 'No contact')} · ${escapeHtml(formatTimestamp(order.updatedAt))}</div>
+          </div>
+          <span class="status-pill status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] || order.status)}</span>
+        </div>
+        <div class="rider-detail-grid">
+          <div class="rider-detail"><div class="rider-detail-label">Order</div><div class="rider-detail-value">${escapeHtml(order.meal || 'Not provided')}</div></div>
+          <div class="rider-detail"><div class="rider-detail-label">Delivery Area</div><div class="rider-detail-value">${escapeHtml(order.area || 'Not provided')}</div></div>
+          <div class="rider-detail"><div class="rider-detail-label">Location</div><div class="rider-detail-value rider-coords">${mapLink(order.gps)}</div></div>
+          <div class="rider-detail"><div class="rider-detail-label">Assigned Rider</div><select class="rider-select" data-action="assign" data-id="${escapeHtml(order.id)}">${riderOptions(order.rider)}</select></div>
+        </div>
+        <div class="rider-status-actions" style="margin-top:10px;">
+          <select class="rider-status-select status-${escapeHtml(order.status)}" data-action="status" data-id="${escapeHtml(order.id)}">
+            <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Pending</option>
+            <option value="picked" ${order.status === 'picked' ? 'selected' : ''}>Picked Up</option>
+            <option value="enroute" ${order.status === 'enroute' ? 'selected' : ''}>En Route</option>
+            <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+          </select>
+          <button type="button" class="btn btn-danger" data-action="delete" data-id="${escapeHtml(order.id)}">Delete</button>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function renderRiderCards() {
+    const cards = byId('rider-cards');
+    if (!cards) return;
+    cards.innerHTML = reliableOrders.length
+      ? reliableOrders.map(order => `<div class="rider-card status-${escapeHtml(order.status)}"><div class="rider-card-top"><div><div class="rider-card-name">Order <span class="initials-badge">${escapeHtml(order.initials)}</span></div><div class="rider-card-meta">${escapeHtml(order.contact || 'No contact')} · ${escapeHtml(formatTimestamp(order.updatedAt))}</div></div><span class="status-pill status-${escapeHtml(order.status)}">${escapeHtml(STATUS_LABELS[order.status] || order.status)}</span></div><div class="rider-detail-grid"><div class="rider-detail"><div class="rider-detail-label">Order</div><div class="rider-detail-value">${escapeHtml(order.meal || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Delivery Area</div><div class="rider-detail-value">${escapeHtml(order.area || 'Not provided')}</div></div><div class="rider-detail"><div class="rider-detail-label">Location</div><div class="rider-detail-value rider-coords">${mapLink(order.gps)}</div></div><div class="rider-detail"><div class="rider-detail-label">Assigned Rider</div><div class="rider-detail-value">${escapeHtml(order.rider || 'Unassigned')}</div></div></div></div>`).join('')
+      : '<div class="empty-state"><div class="icon">🛵</div>No deliveries available.</div>';
+  }
+
+  function clearFormReliable() {
+    ['f-initials', 'f-contact', 'f-meal', 'f-area', 'f-gps'].forEach(id => { const field = byId(id); if (field) field.value = ''; });
+    if (byId('f-status')) byId('f-status').value = 'pending';
+    if (byId('f-rider')) byId('f-rider').value = '';
+  }
+
+  function saveOrderReliable(event) {
+    event.preventDefault();
+    const initials = byId('f-initials')?.value.trim().toUpperCase();
+    if (!initials) {
+      setStatus('Enter order initials before saving.', 'error');
+      byId('f-initials')?.focus();
+      return;
+    }
+    const now = new Date().toISOString();
+    const order = {
+      id: `order-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      initials,
+      contact: byId('f-contact')?.value.trim() || '',
+      meal: byId('f-meal')?.value.trim() || '',
+      area: byId('f-area')?.value.trim() || '',
+      gps: byId('f-gps')?.value.trim() || '',
+      rider: byId('f-rider')?.value || '',
+      status: byId('f-status')?.value || 'pending',
+      updatedAt: now
+    };
+    reliableOrders.unshift(order);
+    if (!writeOrders()) {
+      reliableOrders.shift();
+      setStatus('This browser blocked storage, so the order could not be saved.', 'error');
+      return;
+    }
+    clearFormReliable();
+    renderOrders();
+    renderRiderCards();
+    setStatus('Order saved. It is now visible in the delivery list below.', 'success');
+  }
+
+  function updateOrder(event) {
+    const control = event.target.closest('[data-action]');
+    if (!control) return;
+    const order = reliableOrders.find(item => item.id === control.dataset.id);
+    if (!order) return;
+    if (control.dataset.action === 'assign') order.rider = control.value;
+    if (control.dataset.action === 'status') order.status = control.value;
+    if (control.dataset.action === 'delete') {
+      reliableOrders = reliableOrders.filter(item => item.id !== order.id);
+    }
+    order.updatedAt = new Date().toISOString();
+    writeOrders();
+    renderOrders();
+    renderRiderCards();
+  }
+
+  function initReliableController() {
+    reliableOrders = readOrders();
+    document.querySelectorAll('.tab-btn[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    byId('save-order-button')?.addEventListener('click', saveOrderReliable, true);
+    byId('clear-order-button')?.addEventListener('click', event => { event.preventDefault(); clearFormReliable(); });
+    byId('sync-orders-button')?.addEventListener('click', () => setStatus('Orders are loaded from this device. Configure Supabase for sharing across phones.', 'warning'));
+    byId('rider-refresh-button')?.addEventListener('click', () => { reliableOrders = readOrders(); renderRiderCards(); setStatus('Delivery list refreshed.', 'success'); });
+    byId('orders-list')?.addEventListener('change', updateOrder);
+    byId('orders-list')?.addEventListener('click', updateOrder);
+    renderOrders();
+    renderRiderCards();
+    if (new URLSearchParams(window.location.search).get('view') === 'rider') showView('rider');
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initReliableController);
+  else initReliableController();
+})();
 </script>
 </body>
 </html>
