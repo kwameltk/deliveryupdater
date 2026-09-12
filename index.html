@@ -307,7 +307,7 @@ const SUPABASE_CONFIGURED = Boolean(
 );
 const supabase = SUPABASE_CONFIGURED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } }) : null;
 
-// Central rider list - update here to change available riders across the app
+// Legacy controller retained as inert text for reference only.
 const RIDERS = ['Rider 1', 'Rider 2', 'Rider 3'];
 
 function riderOptionsHtml(selected) {
@@ -1004,8 +1004,8 @@ try {
 <script>
 (() => {
   const STORAGE_KEY = 'kfd_tracker_orders_v2';
-  const SHARED_DB_URL = 'PASTE_SUPABASE_URL';
-  const SHARED_DB_KEY = 'PASTE_SUPABASE_ANON_KEY';
+  const SHARED_DB_URL = 'https://fxrbvxoelccmlcftsivd.supabase.co';
+  const SHARED_DB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4cmJ2eG9lbGNjbWxjZnRzaXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNDQxNzUsImV4cCI6MjEwNDgyMDE3NX0.t0ps4K61XxZM6HtEJ1y_SfcnEEsR7466_7w4t7Od3KY';
   const sharedDb = window.supabase && SHARED_DB_URL !== 'PASTE_SUPABASE_URL' && SHARED_DB_KEY !== 'PASTE_SUPABASE_ANON_KEY'
     ? window.supabase.createClient(SHARED_DB_URL, SHARED_DB_KEY, { auth: { persistSession: false } })
     : null;
